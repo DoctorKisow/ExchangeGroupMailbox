@@ -13,17 +13,17 @@
 .EXAMPLE
     C:\PS> .\MailboxPermissions -Group "Mailbox Security Group" -Mailbox "john.doe@example.org"
 .LINK
-    https://github.com/DoctorKisow/GroupMailbox 
+    https://github.com/DoctorKisow/ExchangeGroupMailbox 
 .NOTES
     Author: Matthew R. Kisow, D.Sc.
     Date:   August 9, 2018
 #>
 
 Param(
- [Parameter(Mandatory=$True, Position=0)]
- [string]$Group,
- [Parameter(Mandatory=$True, Position=1)]
- [string]$Mailbox
+    [Parameter(Mandatory=$True, Position=0)]
+    [string]$Group,
+    [Parameter(Mandatory=$True, Position=1)]
+    [string]$Mailbox
 )
 
 Function ErrorChecking
