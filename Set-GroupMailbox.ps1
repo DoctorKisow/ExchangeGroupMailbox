@@ -20,10 +20,10 @@
 #>
 
 Param(
-    [Parameter(Mandatory=$True, Position=0)]
-    [string]$Group,
-    [Parameter(Mandatory=$True, Position=1)]
-    [string]$Mailbox
+ [Parameter(Mandatory=$True, Position=0)]
+ [string]$Group,
+ [Parameter(Mandatory=$True, Position=1)]
+ [string]$Mailbox
 )
 
 Function ErrorChecking
@@ -45,7 +45,7 @@ Function ErrorChecking
 
 Function VerifyUpdates
 {
-    # The de-facto ARE YOU SURE function used to review and proceed with script execution.
+    # The de-facto "CONFIRM" and "ARE YOU SURE" function used to review and proceed with script execution.
     Write-Host "Are you sure that you want to update the security on this group mailbox."
     $CONTINUE = Read-Host "[Y]es or [N]o"
 
@@ -69,25 +69,36 @@ Function UpdateMailboxSecurity
 
     foreach ($USER in $DISTRIBUTION_LIST)
     {
-        # Add the "FullAccess" permissions for each security group member to the group mailbox.
-    	Add-MailboxPermission -Identity $Mailbox -User $USER -AccessRights 'FullAccess' -InheritanceType 'all' -AutoMapping '$true'
+        $ACE = Get-MailboxPermission -Identity $Mailbox -User $USER | Select-Object -ExpandProperty AccessRights
+        if($ACE -ne 'FullAccess')
+        {
+             # Add the "FullAccess" permissions for each security group member to the group mailbox.
+    	     Add-MailboxPermission -Identity $Mailbox -User $USER -AccessRights FullAccess -InheritanceType all -AutoMapping $true
+        }
     }
 
-    # Set the "SendAs" permission to the security group.
-    Get-User -identity $Mailbox| Add-ADPermission -User $Group -ExtendedRights Send-As
+    # Set the "Send As" permission to the security group.
+    $ACE = Get-RecipientPermission -Identity $Mailbox -Trustee $Group | Select-Object -ExpandProperty AccessRights
+    if($ACE -ne 'SendAs')
+    {
+         Add-RecipientPermission -Identity $Mailbox -AccessRights SendAs -Trustee $Group -Confirm:$false
+    }
 
     # Remove and reset the "Send on Behalf" permission to the security group.
-    Get-Mailbox -identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $null
-    Get-Mailbox -identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $Group
+    Get-Mailbox -Identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $null -ErrorAction 'SilentlyContinue'
+    Get-Mailbox -Identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $Group -ErrorAction 'SilentlyContinue'
 }
 
 ### Main Script
 
 # If not already loaded, load the Exchange server PowerShell modules.
-if ((Get-PSSnapin -Name *Exchange* -ErrorAction SilentlyContinue) -eq $null )
+if ( (Get-PSSnapin -Name *Exchange* -ErrorAction SilentlyContinue) -eq $null )
 {
     Add-PSSnapin *Exchange*
 }
+
+Write-Host -ForegroundColor White "Set-GroupMailbox"
+Write-Host ""
 
 ErrorChecking
 VerifyUpdates
