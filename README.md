@@ -8,4 +8,4 @@ the group and add them individually to the mailbox so the "AutoMapping" property
 automatically assigns the mailbox to the user in Outlook.
 
 # Usage
-Set-MailboxPermissions -Group <Security Group> -Mailbox <Group Mailbox>
+    Set-MailboxPermissions -Group <Security Group> -Mailbox <Group Mailbox>
