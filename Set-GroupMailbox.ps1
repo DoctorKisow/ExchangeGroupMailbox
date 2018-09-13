@@ -7,23 +7,34 @@
     the group and add them individually to the mailbox so the "AutoMapping" property
     automatically assigns the mailbox to the user in Outlook.
 .PARAMETER Group
-    The name of the security group.
+    The name of the security group.   
 .PARAMETER Mailbox
     The name of the mailbox in the john.doe@example.org format.
+.PARAMETER Convert
+    Boolean value represented as $True or $False; used to indicate the conversion of
+    the mailbox to a shared mailbox.  Default value is $False.
+.PARAMETER UpdateSecurity
+    Boolean value represented as $True or $False; used to update mailbox security only.
+    Default value $False.
 .EXAMPLE
     C:\PS> .\MailboxPermissions -Group "Mailbox Security Group" -Mailbox "john.doe@example.org"
+    C:\PS> .\MailboxPermissions -Group "Mailbox Security Group" -Mailbox "john.doe@example.org" -Convert $True
 .LINK
     https://github.com/DoctorKisow/ExchangeGroupMailbox 
 .NOTES
     Author: Matthew R. Kisow, D.Sc.
-    Date:   August 9, 2018
+    Date:   September 13, 2018
 #>
 
 Param(
  [Parameter(Mandatory=$True, Position=0)]
  [string]$Group,
  [Parameter(Mandatory=$True, Position=1)]
- [string]$Mailbox
+ [string]$Mailbox,
+ [Parameter(Mandatory=$False)]
+ [bool]$Convert,
+ [Parameter(Mandatory=$False)]
+ [bool]$UpdateSecurity
 )
 
 Function ErrorChecking
@@ -40,6 +51,18 @@ Function ErrorChecking
     {
          Write-Host "The mailbox $Mailbox does not exist or is not a mailbox."
          exit 1
+    }
+
+    # This is set to ensure that if the Convert parameter is not passed it will be set to $False by default.
+    if ($Convert -eq $Null -or $Convert -eq '')
+    {
+         $Convert = 'False'
+    }
+
+    # This is set to ensure that if the UpdateSecurity parameter is not passed it will be set to $False by default.
+    if ($UpdateSecurity -eq $Null -or $UpdateSecurity -eq '')
+    {
+         $UpdateSecurity = 'False'
     }
 }
 
@@ -70,7 +93,7 @@ Function UpdateMailboxSecurity
     foreach ($USER in $DISTRIBUTION_LIST)
     {
         $ACE = Get-MailboxPermission -Identity $Mailbox -User $USER | Select-Object -ExpandProperty AccessRights
-        if($ACE -ne 'FullAccess')
+        IF ($ACE -ne 'FullAccess')
         {
              # Add the "FullAccess" permissions for each security group member to the group mailbox.
     	     Add-MailboxPermission -Identity $Mailbox -User $USER -AccessRights FullAccess -InheritanceType all -AutoMapping $true
@@ -84,9 +107,24 @@ Function UpdateMailboxSecurity
          Add-RecipientPermission -Identity $Mailbox -AccessRights SendAs -Trustee $Group -Confirm:$false
     }
 
-    # Remove and reset the "Send on Behalf" permission to the security group.
-    Get-Mailbox -Identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $null -ErrorAction 'SilentlyContinue'
-    Get-Mailbox -Identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $Group -ErrorAction 'SilentlyContinue'
+    $GMB = [bool](Get-Mailbox $Mailbox -RecipientTypeDetails UserMailbox, LegacyMailbox, LinkedMailbox, GroupMailbox, RoomMailbox, EquipmentMailbox -ErrorAction 'SilentlyContinue')
+    IF ($GMB -eq 'True')
+    {
+        # Remove and reset the "Send on Behalf" permission to the security group.
+        Get-Mailbox -Identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $null -ErrorAction 'SilentlyContinue'
+        Get-Mailbox -Identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $Group -ErrorAction 'SilentlyContinue'
+    }
+}
+
+Function ConvertShared
+{
+    # Verify the mailbox type and convert if it is not a "Shared" mailbox.
+    $SMB = [bool](Get-Mailbox $Mailbox -RecipientTypeDetails SharedMailbox -ErrorAction 'SilentlyContinue')
+    IF ($SMB -eq 'False')
+    {
+        Write-Host "Converting the group mailbox to a shared mailbox."
+        Set-Mailbox -Identity $Mailbox -Type Share
+    }
 }
 
 ### Main Script
@@ -97,11 +135,16 @@ if ( (Get-PSSnapin -Name *Exchange* -ErrorAction SilentlyContinue) -eq $null )
     Add-PSSnapin *Exchange*
 }
 
+
 Write-Host -ForegroundColor White "Set-GroupMailbox"
 Write-Host ""
 
 ErrorChecking
 VerifyUpdates
+IF ($Convert -eq 'True')
+{
+    ConvertShared
+}
 UpdateMailboxSecurity
 
 # Exit Script
