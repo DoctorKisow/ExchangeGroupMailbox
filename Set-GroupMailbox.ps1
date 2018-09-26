@@ -23,7 +23,7 @@
     https://github.com/DoctorKisow/ExchangeGroupMailbox 
 .NOTES
     Author: Matthew R. Kisow, D.Sc.
-    Date:   September 13, 2018
+    Date:   September 26, 2018
 #>
 
 Param(
