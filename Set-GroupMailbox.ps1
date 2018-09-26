@@ -87,9 +87,22 @@ Function VerifyUpdates
 
 Function UpdateMailboxSecurity
 {
+    Write-Host "Updating mailbox permissions."
+
     # Get the members from the security group.
     $DISTRIBUTION_LIST = Get-DistributionGroupMember $Group | Select-Object -ExpandProperty Name
 
+    # Get the current members from the assigned to the mailbox.
+    $MAILBOX_PERMISSION_LIST = Get-MailboxPermission -Identity $Mailbox | ?{$_.User.ToString() -ne "NT AUTHORITY\SELF" -and $_.IsInherited -eq $false}
+
+    # Remove old mailbox permissions.
+    Write-Host "  Removing outdated 'Full Access' permissions."
+    ForEach ($ObjFound in $MAILBOX_PERMISSION_LIST)
+    {
+        Remove-MailboxPermission -Identity $Mailbox -User $ObjFound.User -AccessRights FullAccess -Confirm:$false
+    }
+
+    Write-Host "  Adding updated 'Full Access' permissions."
     foreach ($USER in $DISTRIBUTION_LIST)
     {
         $ACE = Get-MailboxPermission -Identity $Mailbox -User $USER | Select-Object -ExpandProperty AccessRights
@@ -104,13 +117,15 @@ Function UpdateMailboxSecurity
     $ACE = Get-RecipientPermission -Identity $Mailbox -Trustee $Group | Select-Object -ExpandProperty AccessRights
     if($ACE -ne 'SendAs')
     {
-         Add-RecipientPermission -Identity $Mailbox -AccessRights SendAs -Trustee $Group -Confirm:$false
+        Write-Host "  Updating the 'Send-As' permissions."
+        Add-RecipientPermission -Identity $Mailbox -AccessRights SendAs -Trustee $Group -Confirm:$false
     }
 
     $GMB = [bool](Get-Mailbox $Mailbox -RecipientTypeDetails UserMailbox, LegacyMailbox, LinkedMailbox, GroupMailbox, RoomMailbox, EquipmentMailbox -ErrorAction 'SilentlyContinue')
     IF ($GMB -eq 'True')
     {
         # Remove and reset the "Send on Behalf" permission to the security group.
+        Write-Host "  Updating 'Send on Behalf' permissions."
         Get-Mailbox -Identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $null -ErrorAction 'SilentlyContinue'
         Get-Mailbox -Identity $Mailbox | Set-Mailbox -GrantSendOnBehalfTo $Group -ErrorAction 'SilentlyContinue'
     }
@@ -118,12 +133,19 @@ Function UpdateMailboxSecurity
 
 Function ConvertShared
 {
+    Write-Host "Converting the group mailbox to a shared mailbox."
+
     # Verify the mailbox type and convert if it is not a "Shared" mailbox.
+    Write-Host "  Verifying the mailbox type."
     $SMB = [bool](Get-Mailbox $Mailbox -RecipientTypeDetails SharedMailbox -ErrorAction 'SilentlyContinue')
-    IF ($SMB -eq 'False')
+    IF ($SMB -eq $False)
     {
-        Write-Host "Converting the group mailbox to a shared mailbox."
+        Write-Host "  Converting the mailbox to a shared mailbox."
         Set-Mailbox -Identity $Mailbox -Type Share
+    }
+    ELSE
+    {
+        Write-Host "  Mailbox is already a shared mailbox, not converting."
     }
 }
 
